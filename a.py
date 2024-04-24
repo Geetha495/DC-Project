@@ -4,29 +4,17 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
+import random
+from model import Model
+from config import *
 sockets = []
+comm_costs = [0]*num_procs
 context = zmq.Context()
-num_epochs = 50
-
-class Model(nn.Module):
-    def __init__(self, input_size):
-        super(Model, self).__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(input_size, 10),
-            nn.ReLU(),
-            nn.Linear(10, 10),
-            nn.ReLU(),
-            nn.Linear(10, 1)
-        )
-
-    def forward(self, x):
-        return self.layers(x)
 
 # Model train thread and send grads and Updates using all grads
 # Continuosly receives msgs 
 
-def trainer(id, adj, data, in_nodes, num_grads, recved_grads):
+def trainer(id, adj, data, in_nodes, num_grads, recved_models):
     '''
     model init
     for epochs
@@ -44,47 +32,48 @@ def trainer(id, adj, data, in_nodes, num_grads, recved_grads):
     num_procs = len(adj)
     for e in range(num_epochs):
         # zero grad
-        with torch.no_grad():
-            for param in model.parameters():
-                param.grad = torch.zeros_like(param)
-        
-        y_pred = model(data[0])
-        # print(data[0],data[1])
-        loss = nn.MSELoss()(y_pred, data[1])
-        loss.backward()
+        for r in range(local_update_steps): 
+            y_pred = model(data[0])
+            # print(data[0],data[1])
+            loss = nn.MSELoss()(y_pred, data[1])
+            loss.backward()
+            opt.step()
+            opt.zero_grad()
 
-
-        for n in range(num_procs):
+        # get num_selects distinct random numbers from 0 to num_proc - 1 except id
+        selected = random.sample([i for i in range(num_procs) if i != id], num_selects - 1)
+        selected.append(id)
+        not_selected = [i for i in range(num_procs) if i not in selected]
+        for n in selected:
             neighbor_id = n
-            grads = [param.grad for param in model.parameters()]
-            sockets[id][neighbor_id].send_pyobj({'type':'param_msg', 'grads':grads})
-             
+            sockets[id][neighbor_id].send_pyobj({'type':'param_msg', 'params':model.state_dict()})
+        
+        for n in not_selected:
+            neighbor_id = n
+            sockets[id][neighbor_id].send_pyobj({'type':'null_msg'})
+
         while num_grads[0] < in_nodes:
             pass
         
         with torch.no_grad():
-            for param in model.parameters():
-                param.grad = torch.zeros_like(param.grad)
-            for recvgrad in recved_grads:
-                for param, grad in zip(model.parameters(), recvgrad):
-                    param.grad += grad
-
-            for param in model.parameters():
-                param.grad /= in_nodes
-            lr = 0.01
-
-            for param in model.parameters():
-                param -= lr*param.grad
+            new_state_dict = {}
+            for recved_model in recved_models:
+                for param, value in recved_model.items():
+                    new_state_dict[param] = value + new_state_dict.get(param,0.)
+            
+            for param in new_state_dict.keys():
+                new_state_dict[param] /= num_procs
+            
+            model.load_state_dict(new_state_dict)                    
         
-        
-        recved_grads.clear()
+        recved_models.clear()
         num_grads[0] = 0
-
-    x_test = torch.tensor([1.0])
-    print(model(x_test))
+    torch.save(model.state_dict(), f"models/model_{id}.pt")
+    # x_test = torch.tensor([1.0])
+    # print(model(x_test))
     
 
-def receiver(ctx, id, in_nodes, num_grads, recved_grads):
+def receiver(ctx, id, in_nodes, num_grads, recved_models):
     '''
     for epochs
         for all proc p
@@ -99,9 +88,12 @@ def receiver(ctx, id, in_nodes, num_grads, recved_grads):
     for _ in range(num_epochs*in_nodes):
         msg = consumer_socket.recv_pyobj()
         if msg['type'] == 'param_msg':
-            recved_grads.append(msg['grads'])
-            num_grads[0] += 1
-        
+            recved_models.append(msg['params'])
+            comm_costs[id] += 1
+
+        else:
+            pass
+        num_grads[0] += 1
         while num_grads[0] == in_nodes:
             pass
 
@@ -122,9 +114,8 @@ def init_sockets(adj_list):
 def main():
     # Create a ZeroMQ context
 
-    num_procs = 5
     adjlist = []
-    recved_grads = [[] for _ in range(num_procs)]
+    recved_models = [[] for _ in range(num_procs)]
     in_nodes = [0 for _ in range(num_procs)]
     num_grads = [[0] for _ in range(num_procs)]
     for i in range(num_procs):
@@ -134,30 +125,24 @@ def main():
             in_nodes[j] += 1
         adjlist.append(adj)
 
-    data = []
-    
-        
-    x = 2 * torch.rand(100, 1)  # Random feature values between 0 and 2
-    y = 4 + 3 * x + torch.randn(100, 1)  # Linear relationship with some random noise
-    total = len(x)
-    for i in range(num_procs):
-        start = int((i)/num_procs*total)
-        end = int((i+1)/num_procs*total)
-        data.append([x[start:end], y[start:end]])
     
     init_sockets(adjlist)
     threads = []
     for i in range(num_procs):
-        t = threading.Thread(target=trainer, args=(i, adjlist[i], data[i], in_nodes[i], num_grads[i], recved_grads[i]))
+        t = threading.Thread(target=trainer, args=(i, adjlist[i], data[i], in_nodes[i], num_grads[i], recved_models[i]))
         threads.append(t)
         t.start()
-        t2 = threading.Thread(target=receiver, args=(context, i, in_nodes[i], num_grads[i], recved_grads[i]))
+        t2 = threading.Thread(target=receiver, args=(context, i, in_nodes[i], num_grads[i], recved_models[i]))
         threads.append(t2)
         t2.start()
 
 
     for t in threads:
         t.join()
+
+    log_file = open("log.txt", "w")
+    for i in range(num_procs):
+        log_file.write(f"Process {i} communication cost: {comm_costs[i]}\n")
             
 
 if __name__ == "__main__":
