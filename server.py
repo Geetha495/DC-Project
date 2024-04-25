@@ -1,5 +1,5 @@
 # do same as a.py but with a server
-
+import time
 import socket
 import threading
 import torch
@@ -131,7 +131,8 @@ def main():
 
         else:
             threads.append(threading.Thread(target=client_trainer, args=(context, i, data[i-1])))
-
+    
+    start = time.time()
     # Start threads
     for thread in threads:
         thread.start()
@@ -139,12 +140,16 @@ def main():
     # Join threads
     for thread in threads:
         thread.join()
+    end = time.time()
 
     log_file = open("log.txt", "a")
-    log_file.write("With server:\n")
-    for i in range(num_procs+1):
-        log_file.write(f"Process {i}: {comm_costs[i]}\n")  
-
+    log_file.write("Server:\n")
+    log_file.write(f"num_procs: {num_procs}\n")
+    log_file.write(f"Time taken: {end-start}\n")
+    log_file.write(f"Server communication cost: {comm_costs[0]}\n")
+    for i in range(1,num_procs+1):
+        log_file.write(f"Process {i} communication cost: {comm_costs[i]}\n")  
+    log_file.write("Total communication cost: {}\n".format(sum(comm_costs)))
     log_file.close()        
 
 

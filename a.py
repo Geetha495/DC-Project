@@ -131,19 +131,22 @@ def main():
     for i in range(num_procs):
         t = threading.Thread(target=trainer, args=(i, adjlist[i], data[i], in_nodes[i], num_grads[i], recved_models[i]))
         threads.append(t)
-        t.start()
         t2 = threading.Thread(target=receiver, args=(context, i, in_nodes[i], num_grads[i], recved_models[i]))
         threads.append(t2)
-        t2.start()
-
-
+    start = time.time()
+    for t in threads:
+        t.start()
     for t in threads:
         t.join()
+    end = time.time()
 
-    log_file = open("log.txt", "w")
+    log_file = open("log.txt", "a")
+    log_file.write("Peer-to-Peer:\n")
+    log_file.write(f"num_procs: {num_procs}\n")
+    log_file.write(f"Total time taken: {end-start}\n")
     for i in range(num_procs):
         log_file.write(f"Process {i} communication cost: {comm_costs[i]}\n")
-            
+    log_file.write("Total communication cost: {}\n".format(sum(comm_costs)))   
 
 if __name__ == "__main__":
     main()

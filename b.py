@@ -14,8 +14,8 @@ def main():
     y_test = model(x_test)
     loss = nn.MSELoss()(y_test, f(x_test))
     log_file = open(f"log.txt", "a")
-    log_file.write(f"Loss: {loss}\n")
-    plt.scatter(x_test, y_test.detach().numpy(), label=f"Model {i}", color="blue")
+    log_file.write(f"Testing Loss serverless: {loss}\n")
+    plt.scatter(x_test, y_test.detach().numpy(), label=f"Model Peer-to-Peer", color="blue")
     plt.plot(x_test, f(x_test).detach().numpy(), label="True", color="red")
 
 
@@ -23,7 +23,7 @@ def main():
     y_test = model(x_test)
     loss = nn.MSELoss()(y_test, f(x_test))
     log_file = open(f"log.txt", "a")
-    log_file.write(f"Loss server: {loss}\n")
+    log_file.write(f"Testing Loss server: {loss}\n")
     plt.scatter(x_test, y_test.detach().numpy(), label=f"Model server", color="green")
     plt.legend()
     plt.savefig(f"plots/models.png")
