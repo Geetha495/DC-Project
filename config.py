@@ -9,11 +9,10 @@ args = parser.parse_args()
 num_epochs = 10
 local_update_steps = 10
 num_procs = args.num_procs
-num_selects = num_procs
+num_selects = 4
 
 def f(x):
     return 4 + 3*x
-
 
 data = []
     

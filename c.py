@@ -39,18 +39,22 @@ def trainer(id, adj, data, num_model_received, num_safe_received, num_ack_receiv
     num_procs = len(adj)
     for e in range(num_epochs):
         # zero grad
-        for r in range(local_update_steps + (id + 1)*2): 
+        for r in range(local_update_steps): 
             y_pred = model(data[0])
             # print(data[0],data[1])
             loss = nn.MSELoss()(y_pred, data[1])
             loss.backward()
             opt.step()
             opt.zero_grad()
-
+        
         # get num_selects distinct random numbers from 0 to num_proc - 1 except id
+        selects = random.sample([i for i in range(num_procs) if i != id], num_selects)
+        selects.append(id)
+        for pid in selects:
+                sockets[id][pid].send_pyobj({'sender_id': id, 'tick': e,'type':'model_msg', 'params':model.state_dict()})
         for pid in range(num_procs):
-
-            sockets[id][pid].send_pyobj({'sender_id': id, 'tick': e,'type':'model_msg', 'params':model.state_dict()})
+            if pid not in selects:
+                sockets[id][pid].send_pyobj({'sender_id': id, 'tick': e,'type':'model_msg', 'params':None})
 
         while num_model_received[0] < num_procs:
             pass
@@ -106,8 +110,9 @@ def receiver(ctx, id, num_model_received, num_ack_received, num_safe_received, r
     while num_markers_received < num_procs:
         msg = consumer_socket.recv_pyobj()
         if msg['type'] == 'model_msg':
-            recved_models.append(msg['params'])
-            comm_costs[id] += 1
+            if msg['params'] is not None:
+                recved_models.append(msg['params'])
+                comm_costs[id] += 1
             num_model_received[0] += 1
             sockets[id][msg['sender_id']].send_pyobj({'type': 'ack_msg', 'sender_id': id})
                         
