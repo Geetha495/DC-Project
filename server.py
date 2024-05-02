@@ -30,13 +30,9 @@ def server_trainer(id, in_nodes, num_grads, recved_models):
     model = Model(1)
     for e in range(num_epochs):
         # zero grad
-        
 
-        # get num_selects distinct random numbers from 0 to num_proc - 1 except id
-        selected = random.sample([i for i in range(num_procs+1) if i != id], num_selects)
-        for n in selected:
-            neighbor_id = n
-            sockets_to_clients[neighbor_id].send_pyobj({'type':'param_msg', 'params':model.state_dict()})
+        for i in range(1,in_nodes+1):
+            sockets_to_clients[i].send_pyobj({'type':'param_msg', 'params':model.state_dict()})
         
         while num_grads[0] < in_nodes:
 
@@ -56,7 +52,7 @@ def server_trainer(id, in_nodes, num_grads, recved_models):
             recved_models.clear()
 
 
-    torch.save(model.state_dict(), f"models/model_server.pt")
+    torch.save(model.state_dict(), f"models/{model_file_server}")
     
 
 
@@ -142,13 +138,13 @@ def main():
         thread.join()
     end = time.time()
 
-    log_file = open("log.txt", "a")
+    log_file = open(log_filename, "a")
     log_file.write("Server:\n")
     log_file.write(f"num_procs: {num_procs}\n")
     log_file.write(f"Time taken: {end-start}\n")
-    log_file.write(f"Server communication cost: {comm_costs[0]}\n")
-    for i in range(1,num_procs+1):
-        log_file.write(f"Process {i} communication cost: {comm_costs[i]}\n")  
+    #log_file.write(f"Server communication cost: {comm_costs[0]}\n")
+    #for i in range(1,num_procs+1):
+    #    log_file.write(f"Process {i} communication cost: {comm_costs[i]}\n")  
     log_file.write("Total communication cost: {}\n".format(sum(comm_costs)))
     log_file.close()        
 
