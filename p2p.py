@@ -111,7 +111,8 @@ def trainer(id, data, num_model_received, num_safe_received, num_ack_received,re
 
         if id == 0:
             with torch.no_grad():
-                val_loss = nn.MSELoss()(model(data[0]), data[1])
+                y_pred = model(x_val)
+                val_loss = nn.MSELoss()(y_val, y_pred)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss            

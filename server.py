@@ -27,6 +27,7 @@ def server_trainer(id, in_nodes, num_grads, recved_models):
         
         update model 
     '''
+    best_val_loss = torch.inf
     model = Model(1)
     for e in range(num_epochs):
         # zero grad
@@ -51,9 +52,12 @@ def server_trainer(id, in_nodes, num_grads, recved_models):
             num_grads[0] = 0
             recved_models.clear()
 
-
-    torch.save(model.state_dict(), f"models/{model_file_server}")
-    
+            with torch.no_grad():
+                y_pred = model(x_val)
+                val_loss = nn.MSELoss()(y_val, y_pred)
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    torch.save(model.state_dict(), f"models/{model_file_server}")    
 
 
 def server_consumer(ctx, id, in_nodes, num_grads, recved_models):
