@@ -75,7 +75,7 @@ def trainer(id, data, num_model_received, num_safe_received, num_ack_received,re
         # zero grad
         if id == 0:
             print(f"Epoch {e}")
-        for r in range(local_update_steps + (id + 1)*2): 
+        for r in range(local_update_steps): 
             y_pred = model(data[0])
             # print(data[0],data[1])
             loss = nn.MSELoss()(y_pred, data[1])
@@ -202,6 +202,7 @@ def main():
 
     log_file = open(log_filename, "a")
     log_file.write("Peer-to-Peer:\n")
+    log_file.write(f"Sparsity: {sparsity_index}\n")
     log_file.write(f"num_procs: {num_procs}\n")
     log_file.write(f"Time taken: {end-start}\n")
     #for i in range(num_procs):
