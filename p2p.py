@@ -5,8 +5,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import random
-from model import Model
+from model import *
 from config import *
+from tqdm import tqdm
+from data import train_loaders
 sockets = [{} for _ in range(num_procs)]
 comm_costs = [0]*num_procs
 context = zmq.Context()
@@ -68,20 +70,35 @@ def trainer(id, data, num_model_received, num_safe_received, num_ack_received,re
     '''
     best_val_loss = torch.inf
 
-    model = Model(1)
-    opt = optim.Adam(model.parameters(), lr=1e-2)
+    model = AlexNetMNIST()
+    opt = optim.Adam(model.parameters(), lr=1e-3)
+    criterion = nn.CrossEntropyLoss()
     num_procs = len(adj)
-    for e in range(num_epochs):
+
+    if id == 0:
+        pbar = tqdm(range(num_epochs))
+    else:
+        pbar = range(num_epochs)
+    for e in pbar:
         # zero grad
         if id == 0:
-            print(f"Epoch {e}")
-        for r in range(local_update_steps): 
-            y_pred = model(data[0])
-            # print(data[0],data[1])
-            loss = nn.MSELoss()(y_pred, data[1])
-            loss.backward()
-            opt.step()
-            opt.zero_grad()
+            print(f"Round {e}")
+        for r in range(local_update_steps):
+            for i, data in enumerate(data, 0):
+                inputs, labels = data
+
+                opt.zero_grad()
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                opt.step()
+
+                if id == 0:
+                    pbar.set_postfix({'loss': loss.item()})
+                # if id == 0 and i % 100 == 99:  # Print every 100 mini-batches
+                #     print(f'[Epoch {r + 1}, Mini-batch {i + 1}] loss: {running_loss / 100:.3f}')
+                #     running_loss = 0.0
+
 
         # get num_selects distinct random numbers from 0 to num_proc - 1 except id
         for pid in adj[id]:
@@ -110,12 +127,12 @@ def trainer(id, data, num_model_received, num_safe_received, num_ack_received,re
         num_ack_received[0] = 0
 
         if id == 0:
-            with torch.no_grad():
-                y_pred = model(x_val)
-                val_loss = nn.MSELoss()(y_val, y_pred)
+        #     with torch.no_grad():
+        #         y_pred = model(x_val)
+        #         val_loss = nn.MSELoss()(y_val, y_pred)
 
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss            
+        #     if val_loss < best_val_loss:
+        #         best_val_loss = val_loss            
                 torch.save(model.state_dict(), f"models/{model_file_p2p}")
 
 
@@ -191,7 +208,7 @@ def main():
     init_sockets(adj)
     threads = []
     for i in range(num_procs):
-        threads.append(threading.Thread(target=trainer, args=(i, data[i], num_model_received[i], num_safe_received[i], num_ack_received[i],recved_models[i])))
+        threads.append(threading.Thread(target=trainer, args=(i, train_loaders[i], num_model_received[i], num_safe_received[i], num_ack_received[i],recved_models[i])))
         threads.append(threading.Thread(target=receiver, args=(context, i, num_model_received[i], num_ack_received[i], num_safe_received[i], recved_models[i])))
     start = time.time()
     for t in threads:
@@ -202,7 +219,6 @@ def main():
 
     log_file = open(log_filename, "a")
     log_file.write("Peer-to-Peer:\n")
-    log_file.write(f"Sparsity: {sparsity_index}\n")
     log_file.write(f"num_procs: {num_procs}\n")
     log_file.write(f"Time taken: {end-start}\n")
     #for i in range(num_procs):

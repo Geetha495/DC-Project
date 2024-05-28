@@ -22,22 +22,23 @@ model_file_server = args.model_file_server
 model_file_p2p = args.model_file_p2p
 len_data = 1000
 
-def f(x):
-    return 4 + 3*x
+# def f(x):
+#     return 4 + 3*x
 
-data = []
-
-
-x = 10 * torch.rand(len_data, 1)  # Random feature values between 0 and 10
-y = f(x) + torch.randn(len_data, 1)  # Linear relationship with some random noise
-
-x_train, x_temp, y_train, y_temp = train_test_split(x, y, test_size=0.3, random_state=42)
-x_val, x_test, y_val, y_test = train_test_split(x_temp, y_temp, test_size=0.5, random_state=42)
+# data = []
 
 
-total = len(x_train)
-for i in range(num_procs):
-    start = int((i)/num_procs*total)
-    end = int((i+1)/num_procs*total)
-    data.append([x_train[start:end], y_train[start:end]])
-    
+# x = 10 * torch.rand(len_data, 1)  # Random feature values between 0 and 10
+# y = f(x) + torch.randn(len_data, 1)  # Linear relationship with some random noise
+
+# x_train, x_temp, y_train, y_temp = train_test_split(x, y, test_size=0.3, random_state=42)
+# x_val, x_test, y_val, y_test = train_test_split(x_temp, y_temp, test_size=0.5, random_state=42)
+
+
+# total = len(x_train)
+# for i in range(num_procs):
+#     start = int((i)/num_procs*total)
+#     end = int((i+1)/num_procs*total)
+#     data.append([x_train[start:end], y_train[start:end]])
+
+ 
